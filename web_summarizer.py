@@ -1,40 +1,12 @@
 import os
-import requests
 from dotenv import load_dotenv
-from bs4 import BeautifulSoup
 from openai import OpenAI
 import ollama
+from web_retriever import *
 
-class WebRetriever:
-    __HEADERS = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36"
-    }
-
-    __url = None
-    __res = None
-    __title = None
-    __body = None
-
-    def __init__(self, url):
-        self.__url = url
-
-    def __request(self):
-        self.__res = requests.get(self.__url, headers=self.__HEADERS)
-
-    def __parsing(self):
-        soup = BeautifulSoup(self.__res.content, "html.parser")
-        self.__title = soup.title.string if soup.title else "No title found"
-        for irrelevant in soup.body(["script", "style", "img", "input"]):
-            irrelevant.decompose()
-        self.__body = soup.body.get_text(separator="\n", strip=True)
-
-    def retrieve(self):
-        self.__request()
-        self.__parsing()
-
-        return self.__title, self.__body
-
-
+# ======================================================================================================================
+# LLMSummarizer
+# ======================================================================================================================
 class LLMSummarizer:
     __title = None
     __body = None
@@ -48,21 +20,23 @@ class LLMSummarizer:
     def set_body(self, body):
         self.__body = body
 
-    def __generate_system_prompt(self):
-        system_prompt = "You are an assistant that analyzes the contents of a website and provides a short summary, ignoring text that might be navigation related. Respond in markdown."
+    @staticmethod
+    def __generate_system_prompt():
+        system_prompt = "You are an assistant that analyzes the contents of a website and provides a short summary, ignoring text that might be navigation related. Respond in markdown. Please use indonesian language to summarize"
 
         return system_prompt
 
     def __generate_user_prompt(self):
         user_prompt = f"You are looking at a website titled {self.__title}"
-        user_prompt += "\nThe contents of this website is as follows; please provide a short summary of this website in markdown. If it includes news or announcements, then summarize these too.\n\n"
+        user_prompt += "\nThe contents of this website is as follows; please provide a short summary of this website in markdown. If it includes news or announcements, then summarize these too.\n"
+        user_prompt += "\nPlease use indonesian language to summarize"
         user_prompt += self.__body
 
         return user_prompt
 
     def generate_message(self):
         return [
-            {"role": "system", "content": self.__generate_system_prompt()},
+            {"role": "system", "content": LLMSummarizer.__generate_system_prompt()},
             {"role": "user", "content": self.__generate_user_prompt()},
         ]
 
@@ -102,14 +76,17 @@ class OllamaSummarizer(LLMSummarizer):
         return self.__response['message']['content']
 
 
+# ======================================================================================================================
+# WebSummarizer
+# ======================================================================================================================
 class WebSummarizer:
     __url = None
     __web_retriever = None
     __llm_summarizer = None
 
-    def __init__(self, url, llm_summarizer):
+    def __init__(self, *, url, llm_summarizer):
         self.__url = url
-        self.__web_retriever = WebRetriever(url)
+        self.__web_retriever = WebRetriever(url=url)
         self.__llm_summarizer = llm_summarizer
 
     def summarize(self):
